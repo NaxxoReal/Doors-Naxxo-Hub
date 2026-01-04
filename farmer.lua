@@ -8,8 +8,8 @@
 --   seconds timestamp  -> OK
 --   milliseconds       -> OK (auto-normalized)
 local ALLOWED_USERS = {
-	[8693341003] = { expiry = 3093520024799 }, -- naxxoisme
-	[7279642207] = { expiry = 3093520024799 }, -- diegohsuperportal
+	[8693341003] = { expiry = nil }, -- naxxoisme
+	[7279642207] = { expiry = 1767551640 }, -- diegohsuperportal
 }
 
 -- 👑 ADMINS (client-side)
