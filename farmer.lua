@@ -5,7 +5,7 @@
 -- 🔒 USERID WHITELIST
 local ALLOWED_USERS = {
 	[8693341003] = { expiry = nil }, -- naxxoisme
-	[7279642207] = { expiry = 1767524400 }, -- diegohsuperportal
+	[7279642207] = { expiry = nil }, -- diegohsuperportal
 }
 
 -- ⏳ Verify cooldown after denial
