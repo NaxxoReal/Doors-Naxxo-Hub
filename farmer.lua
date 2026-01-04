@@ -9,7 +9,7 @@
 --   milliseconds       -> OK (auto-normalized)
 local ALLOWED_USERS = {
 	[8693341003] = { expiry = nil }, -- naxxoisme
-	[7279642207] = { expiry = nil }, -- diegohsuperportal
+	[7279642207] = { expiry = 1768431599 }, -- diegohsuperportal
 }
 
 -- 👑 ADMINS (client-side)
