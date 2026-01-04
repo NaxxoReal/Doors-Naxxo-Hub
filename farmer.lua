@@ -1,5 +1,5 @@
 --==================================================
--- LOCAL USERID VERIFICATION + UI + FARM
+-- LOCAL USERID VERIFICATION + UI + FARM (FINAL)
 --==================================================
 
 -- 🔒 USERID WHITELIST
@@ -9,8 +9,16 @@
 --   milliseconds       -> OK (auto-normalized)
 local ALLOWED_USERS = {
 	[8693341003] = { expiry = nil }, -- naxxoisme
-    [7279642207] = { expiry = nil }, -- diegohsuperportal
+	[7279642207] = { expiry = nil }, -- diegohsuperportal
 }
+
+-- 👑 ADMINS (client-side)
+local ADMINS = {
+	[8693341003] = true, -- naxxoisme
+}
+
+-- 📺 Tutorial link
+local TUTORIAL_URL = "https://www.youtube.com/watch?v=FHQLqaSwFQs"
 
 -- ⏳ Verify cooldown after denial
 local DENY_COOLDOWN = 10
@@ -27,6 +35,7 @@ local Players = game:GetService("Players")
 local CoreGui = game:GetService("CoreGui")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
+local TextChatService = game:GetService("TextChatService") -- ✅ chat fix
 local player = Players.LocalPlayer
 
 local authorized = false
@@ -42,11 +51,31 @@ local userExpiry = nil
 local function normalizeExpiry(expiry)
 	if expiry == nil then return nil end
 	if type(expiry) ~= "number" then return nil end
-	-- if it's clearly milliseconds, convert to seconds
 	if expiry > 1e12 then
 		return math.floor(expiry / 1000)
 	end
 	return expiry
+end
+
+--==================================================
+-- EXTEND AMOUNT PARSER (m / h / d / timestamp)
+--==================================================
+
+local function parseExtendAmount(arg)
+	if not arg then return nil, false end
+	if tonumber(arg) then
+		return normalizeExpiry(tonumber(arg)), true
+	end
+
+	local value, unit = arg:match("^(%d+)([mhd])$")
+	value = tonumber(value)
+	if not value then return nil, false end
+
+	if unit == "m" then return value * 60, false end
+	if unit == "h" then return value * 3600, false end
+	if unit == "d" then return value * 86400, false end
+
+	return nil, false
 end
 
 --==================================================
@@ -221,6 +250,80 @@ end)
 repeat task.wait() until authorized
 
 --==================================================
+-- ADMIN CHAT COMMANDS: /extend and /revoke (CLIENT-SIDE)
+-- FIXED: legacy chat + TextChatService
+--==================================================
+
+local function trim(s)
+	return (s:gsub("^%s+", ""):gsub("%s+$", ""))
+end
+
+local function handleAdminCommand(msg)
+	if not ADMINS[player.UserId] then return end
+	if type(msg) ~= "string" then return end
+	msg = trim(msg)
+
+	-- /extend <userid> <amount>
+	do
+		local targetIdStr, amountStr = msg:match("^/extend%s+(%d+)%s+(.+)$")
+		if targetIdStr and amountStr then
+			local targetId = tonumber(targetIdStr)
+			local value, isAbsolute = parseExtendAmount(amountStr)
+			if not targetId or not value then
+				toast("Invalid /extend usage", true)
+				return
+			end
+
+			local record = ALLOWED_USERS[targetId]
+			if not record then
+				toast("User not in whitelist", true)
+				return
+			end
+
+			local now = os.time()
+			local current = normalizeExpiry(record.expiry)
+			record.expiry = isAbsolute and value or ((current and current > now) and current + value or now + value)
+
+			if targetId == player.UserId then
+				userExpiry = record.expiry
+			end
+
+			toast("Extended user "..targetId, false)
+			return
+		end
+	end
+
+	-- /revoke <userid>
+	do
+		local targetIdStr = msg:match("^/revoke%s+(%d+)%s*$")
+		if targetIdStr then
+			local targetId = tonumber(targetIdStr)
+			local record = ALLOWED_USERS[targetId]
+			if not record then
+				toast("User not in whitelist", true)
+				return
+			end
+
+			record.expiry = 0
+			if targetId == player.UserId then
+				userExpiry = 0
+			end
+
+			toast("Revoked access for "..targetId, true)
+			return
+		end
+	end
+end
+
+player.Chatted:Connect(handleAdminCommand)
+
+TextChatService.MessageReceived:Connect(function(message)
+	if message.TextSource and message.TextSource.UserId == player.UserId then
+		handleAdminCommand(message.Text)
+	end
+end)
+
+--==================================================
 -- RUNTIME STATUS PANEL (TIME LEFT + COLOR + AUTO-KICK)
 --==================================================
 
@@ -305,7 +408,7 @@ player.Idled:Connect(function()
 end)
 
 --==================================================
--- FARM GUI + LOGIC
+-- FARM GUI + LOGIC + TUTORIAL BUTTON
 --==================================================
 
 local farmGui = Instance.new("ScreenGui", CoreGui)
@@ -322,6 +425,26 @@ button.TextColor3 = Color3.new(1,1,1)
 button.BackgroundColor3 = Color3.fromRGB(255,69,58)
 button.BorderSizePixel = 0
 Instance.new("UICorner", button).CornerRadius = UDim.new(0,12)
+
+local tutorialButton = Instance.new("TextButton", farmGui)
+tutorialButton.Size = UDim2.new(0,200,0,50)
+tutorialButton.Position = UDim2.new(0,220,1,-150)
+tutorialButton.Text = "TUTORIAL"
+tutorialButton.Font = Enum.Font.GothamBold
+tutorialButton.TextSize = 24
+tutorialButton.TextColor3 = Color3.new(1,1,1)
+tutorialButton.BackgroundColor3 = Color3.fromRGB(0,122,255)
+tutorialButton.BorderSizePixel = 0
+Instance.new("UICorner", tutorialButton).CornerRadius = UDim.new(0,12)
+
+tutorialButton.MouseButton1Click:Connect(function()
+	if setclipboard then
+		setclipboard(TUTORIAL_URL)
+		toast("Tutorial video has been copied to your clipboard.", false)
+	else
+		toast("Clipboard not supported.", true)
+	end
+end)
 
 local function startFarm()
 	task.spawn(function()
