@@ -248,10 +248,10 @@ local function stat(y, text)
 	return t
 end
 
-local statFarm = stat(20, "Farm: OFF")
-local statIter = stat(40, "Iterations: 0")
+local statTime = stat(20, "Time Left: ...")
+local statFarm = stat(40, "Farm: OFF")
 local statUp = stat(60, "Uptime: 0s")
-local statTime = stat(80, "Time Left: ...")
+local statIter = stat(80, "Iterations: 0")
 
 local function formatTimeLeft(seconds)
 	local d = math.floor(seconds / 86400)
@@ -268,7 +268,7 @@ task.spawn(function()
 		statUp.Text = "Uptime: " .. math.floor(os.clock() - authorizedAt) .. "s"
 
 		if userExpiry == nil then
-			statTime.Text = "Time Left: lifetime"
+			statTime.Text = "Time Left: Lifetime"
 			statTime.TextColor3 = Color3.fromRGB(52,199,89)
 		else
 			local remaining = userExpiry - os.time()
