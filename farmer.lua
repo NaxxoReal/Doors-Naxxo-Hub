@@ -3,13 +3,21 @@
 --==================================================
 
 -- 🔒 USERID WHITELIST
+-- expiry can be:
+--   nil                -> lifetime
+--   seconds timestamp  -> OK
+--   milliseconds       -> OK (auto-normalized)
 local ALLOWED_USERS = {
 	[8693341003] = { expiry = nil }, -- naxxoisme
-	[7279642207] = { expiry = nil }, -- diegohsuperportal
+    [7279642207] = { expiry = nil }, -- diegohsuperportal
 }
 
 -- ⏳ Verify cooldown after denial
 local DENY_COOLDOWN = 10
+
+-- ⏱️ COUNTDOWN COLOR THRESHOLDS (seconds)
+local WARN_TIME = 60 * 60      -- 1 hour → yellow
+local CRITICAL_TIME = 5 * 60   -- 5 minutes → red
 
 --==================================================
 -- SERVICES
@@ -25,6 +33,21 @@ local authorized = false
 local farmenabled = false
 local farmIterations = 0
 local authorizedAt = 0
+local userExpiry = nil
+
+--==================================================
+-- EXPIRY NORMALIZER (FIXES ms vs s BUG)
+--==================================================
+
+local function normalizeExpiry(expiry)
+	if expiry == nil then return nil end
+	if type(expiry) ~= "number" then return nil end
+	-- if it's clearly milliseconds, convert to seconds
+	if expiry > 1e12 then
+		return math.floor(expiry / 1000)
+	end
+	return expiry
+end
 
 --==================================================
 -- STATUS BANNER (ANIMATED)
@@ -42,17 +65,13 @@ banner.TextColor3 = Color3.new(1,1,1)
 banner.Font = Enum.Font.GothamBold
 banner.TextSize = 14
 banner.BorderSizePixel = 0
-banner.Text = "Status: Not Verified"
 Instance.new("UICorner", banner).CornerRadius = UDim.new(0, 10)
 
 local basePos = banner.Position
 local pulseConn
 
 local function stopPulse()
-	if pulseConn then
-		pulseConn:Disconnect()
-		pulseConn = nil
-	end
+	if pulseConn then pulseConn:Disconnect() pulseConn = nil end
 end
 
 local function pulseBanner()
@@ -78,7 +97,7 @@ local function setStatus(text, color, anim)
 	banner.Text = "Status: " .. text
 	TweenService:Create(
 		banner,
-		TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+		TweenInfo.new(0.25, Enum.EasingStyle.Quad),
 		{ BackgroundColor3 = color, BackgroundTransparency = 0 }
 	):Play()
 
@@ -179,9 +198,12 @@ verify.MouseButton1Click:Connect(function()
 	if cooldown then return end
 
 	local record = ALLOWED_USERS[player.UserId]
-	if record and (record.expiry == nil or os.time() <= record.expiry) then
+	local expiry = record and normalizeExpiry(record.expiry)
+
+	if record and (expiry == nil or os.time() <= expiry) then
 		authorized = true
 		authorizedAt = os.clock()
+		userExpiry = expiry
 		setStatus("Verified", Color3.fromRGB(52,199,89))
 		toast("Verified successfully", false)
 		verifyGui:Destroy()
@@ -199,7 +221,7 @@ end)
 repeat task.wait() until authorized
 
 --==================================================
--- RUNTIME STATUS PANEL
+-- RUNTIME STATUS PANEL (TIME LEFT + COLOR + AUTO-KICK)
 --==================================================
 
 local statsGui = Instance.new("ScreenGui", CoreGui)
@@ -207,8 +229,8 @@ statsGui.ResetOnSpawn = false
 statsGui.IgnoreGuiInset = true
 
 local statsFrame = Instance.new("Frame", statsGui)
-statsFrame.Size = UDim2.new(0, 240, 0, 120)
-statsFrame.Position = UDim2.new(1, -260, 0, 70)
+statsFrame.Size = UDim2.new(0, 260, 0, 140)
+statsFrame.Position = UDim2.new(1, -280, 0, 70)
 statsFrame.BackgroundColor3 = Color3.fromRGB(20,20,20)
 statsFrame.BorderSizePixel = 0
 Instance.new("UICorner", statsFrame).CornerRadius = UDim.new(0, 14)
@@ -229,12 +251,46 @@ end
 local statFarm = stat(20, "Farm: OFF")
 local statIter = stat(40, "Iterations: 0")
 local statUp = stat(60, "Uptime: 0s")
+local statTime = stat(80, "Time Left: ...")
+
+local function formatTimeLeft(seconds)
+	local d = math.floor(seconds / 86400)
+	local h = math.floor((seconds % 86400) / 3600)
+	local m = math.floor((seconds % 3600) / 60)
+	local s = seconds % 60
+	return string.format("%dd %dh %dm %ds", d, h, m, s)
+end
 
 task.spawn(function()
-	while true do
+	while authorized do
 		statFarm.Text = "Farm: " .. (farmenabled and "ON" or "OFF")
 		statIter.Text = "Iterations: " .. farmIterations
 		statUp.Text = "Uptime: " .. math.floor(os.clock() - authorizedAt) .. "s"
+
+		if userExpiry == nil then
+			statTime.Text = "Time Left: lifetime"
+			statTime.TextColor3 = Color3.fromRGB(52,199,89)
+		else
+			local remaining = userExpiry - os.time()
+			if remaining <= 0 then
+				farmenabled = false
+				setStatus("Expired", Color3.fromRGB(255,149,0), "shake")
+				toast("Your access has expired.", true)
+				task.wait(1.5)
+				player:Kick("Your access has expired.")
+				break
+			end
+
+			statTime.Text = "Time Left: " .. formatTimeLeft(remaining)
+			if remaining <= CRITICAL_TIME then
+				statTime.TextColor3 = Color3.fromRGB(255,69,58)
+			elseif remaining <= WARN_TIME then
+				statTime.TextColor3 = Color3.fromRGB(255,214,10)
+			else
+				statTime.TextColor3 = Color3.fromRGB(52,199,89)
+			end
+		end
+
 		task.wait(0.5)
 	end
 end)
@@ -276,7 +332,6 @@ local function startFarm()
 				:WaitForChild("RemotesFolder")
 				:WaitForChild("Statistics")
 				:FireServer()
-
 			farmIterations += 1
 			task.wait(0.25)
 		end
