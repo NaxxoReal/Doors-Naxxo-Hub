@@ -4,7 +4,7 @@ local UNLOADED = false
 local CONNECTIONS = {}
 
 local ALLOWED_USERS = {
-	[8693341003] = { expiry = nil }, -- naxxoisme
+	[8693341003] = { expiry = 1767630300 }, -- naxxoisme
 	[7279642207] = { expiry = nil }, -- diegohsuperportal
 }
 
