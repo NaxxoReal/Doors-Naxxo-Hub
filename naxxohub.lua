@@ -1,12 +1,8 @@
 --==================================================
--- LOCAL USERID VERIFICATION + UI + FARM (FINAL)
---==================================================
+-- Naxxo Hub (Roblox Lua)		
+local UNLOADED = false
+local CONNECTIONS = {}
 
--- 🔒 USERID WHITELIST
--- expiry can be:
---   nil                -> Never
---   seconds timestamp  -> OK
---   milliseconds       -> OK (auto-normalized)
 local ALLOWED_USERS = {
 	[8693341003] = { expiry = nil }, -- naxxoisme
 	[7279642207] = { expiry = nil }, -- diegohsuperportal
@@ -231,7 +227,7 @@ verify.MouseButton1Click:Connect(function()
 
 	if record and (expiry == nil or os.time() <= expiry) then
 		authorized = true
-		authorizedAt = os.clock()
+		authorizedAt = os.time()
 		userExpiry = expiry
 		setStatus("Verified", Color3.fromRGB(52,199,89))
 		toast("Verified successfully", false)
@@ -327,7 +323,9 @@ end)
 -- RUNTIME STATUS PANEL (TIME LEFT + COLOR + AUTO-KICK)
 --==================================================
 
-local statsGui = Instance.new("ScreenGui", CoreGui)
+if false then
+
+local statsGui = nil
 statsGui.ResetOnSpawn = false
 statsGui.IgnoreGuiInset = true
 
@@ -365,7 +363,7 @@ local function formatTimeLeft(seconds)
 end
 
 task.spawn(function()
-	while authorized do
+	while authorized and not UNLOADED do
 		statFarm.Text = "Knob Farm: " .. (farmenabled and "ON" or "OFF")
 		statIter.Text = "Iterations: " .. farmIterations
 		statUp.Text = "Uptime: " .. math.floor(os.clock() - authorizedAt) .. "s"
@@ -398,6 +396,7 @@ task.spawn(function()
 	end
 end)
 
+end
 --==================================================
 -- ANTI-AFK
 --==================================================
@@ -408,30 +407,149 @@ player.Idled:Connect(function()
 end)
 
 --==================================================
--- FARM GUI + LOGIC + TUTORIAL BUTTON
+-- SCRIPT HUB (MAIN / SETTINGS)
 --==================================================
 
-local farmGui = Instance.new("ScreenGui", CoreGui)
-farmGui.ResetOnSpawn = false
-farmGui.IgnoreGuiInset = true
+local UserInputService = game:GetService("UserInputService")
 
-local button = Instance.new("TextButton", farmGui)
-button.Size = UDim2.new(0,200,0,50)
-button.Position = UDim2.new(0,10,1,-150)
-button.Text = "Knob Farm: OFF"
-button.Font = Enum.Font.GothamBold
-button.TextSize = 24
-button.TextColor3 = Color3.new(1,1,1)
-button.BackgroundColor3 = Color3.fromRGB(255,69,58)
-button.BorderSizePixel = 0
-Instance.new("UICorner", button).CornerRadius = UDim.new(0,12)
+-- Hub keybind settings
+local HUB_KEY = Enum.KeyCode.RightShift
+local keybindEnabled = true
+local hubVisible = true
 
-local tutorialButton = Instance.new("TextButton", farmGui)
-tutorialButton.Size = UDim2.new(0,200,0,50)
-tutorialButton.Position = UDim2.new(0,220,1,-150)
-tutorialButton.Text = "TUTORIAL"
+local hubGui = Instance.new("ScreenGui", CoreGui)
+hubGui.ResetOnSpawn = false
+hubGui.IgnoreGuiInset = true
+
+local hub = Instance.new("Frame", hubGui)
+hub.Size = UDim2.new(0, 420, 0, 260)
+hub.Position = UDim2.new(0.5, -180, 0.6, -130)
+hub.BackgroundColor3 = Color3.fromRGB(20,20,20)
+hub.BorderSizePixel = 0
+Instance.new("UICorner", hub).CornerRadius = UDim.new(0,14)
+
+hub.Active = true
+hub.Draggable = true
+
+-- Title
+local title = Instance.new("TextLabel", hub)
+title.Size = UDim2.new(1,0,0,45)
+title.Text = "Naxxo Hub"
+title.Font = Enum.Font.GothamBold
+title.TextSize = 22
+title.TextColor3 = Color3.new(1,1,1)
+title.BackgroundTransparency = 1
+
+-- Tabs bar
+local tabBar = Instance.new("Frame", hub)
+tabBar.Size = UDim2.new(1,0,0,40)
+tabBar.Position = UDim2.new(0,0,0,45)
+tabBar.BackgroundTransparency = 1
+
+local tabIndicator = Instance.new("Frame", tabBar)
+tabIndicator.Size = UDim2.new(1/3, -14, 0, 4)
+tabIndicator.Position = UDim2.new(0, 7, 1, -4)
+tabIndicator.BackgroundColor3 = Color3.fromRGB(52,199,89)
+tabIndicator.BorderSizePixel = 0
+Instance.new("UICorner", tabIndicator).CornerRadius = UDim.new(1, 0)
+
+local function createTabButton(text, pos)
+	local b = Instance.new("TextButton", tabBar)
+	b.Size = UDim2.new(1/3, -14, 1, 0)
+    b.Position = UDim2.new(pos, 7, 0, 0)
+	b.Text = text
+	b.Font = Enum.Font.GothamBold
+	b.TextSize = 16
+	b.TextColor3 = Color3.new(1,1,1)
+	b.BackgroundColor3 = Color3.fromRGB(35,35,35)
+	b.BorderSizePixel = 0
+	Instance.new("UICorner", b).CornerRadius = UDim.new(0,10)
+	return b
+end
+
+local infoTabBtn     = createTabButton("INFORMATION", 0)
+local mainTabBtn     = createTabButton("MAIN", 1/3)
+local settingsTabBtn = createTabButton("SETTINGS", 2/3)
+
+-- Pages
+local pages = Instance.new("Folder", hub)
+
+local function createPage()
+	local f = Instance.new("Frame", pages)
+	f.Size = UDim2.new(1,-40,1,-110)
+	f.Position = UDim2.new(0,20,0,100)
+	f.BackgroundTransparency = 1
+	f.Visible = false
+	return f
+end
+
+local mainPage = createPage()
+local settingsPage = createPage()
+local infoPage = createPage()
+
+infoPage.Visible = true
+infoTabBtn.BackgroundColor3 = Color3.fromRGB(52,199,89)
+
+local function switchTab(target)
+	mainPage.Visible = target == mainPage
+	settingsPage.Visible = target == settingsPage
+	infoPage.Visible = target == infoPage
+
+	mainTabBtn.BackgroundColor3 =
+		target == mainPage and Color3.fromRGB(52,199,89) or Color3.fromRGB(35,35,35)
+
+	settingsTabBtn.BackgroundColor3 =
+		target == settingsPage and Color3.fromRGB(52,199,89) or Color3.fromRGB(35,35,35)
+
+	infoTabBtn.BackgroundColor3 =
+		target == infoPage and Color3.fromRGB(52,199,89) or Color3.fromRGB(35,35,35)
+
+	-- 🔥 animate underline
+	local goalX =
+		target == infoPage and 0
+		or target == mainPage and 1/3
+		or 2/3
+
+	TweenService:Create(
+		tabIndicator,
+		TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+		{ Position = UDim2.new(goalX, 7, 1, -4) }
+	):Play()
+end
+
+infoTabBtn.MouseButton1Click:Connect(function()
+	switchTab(infoPage)
+end)
+
+mainTabBtn.MouseButton1Click:Connect(function()
+	switchTab(mainPage)
+end)
+
+settingsTabBtn.MouseButton1Click:Connect(function()
+	switchTab(settingsPage)
+end)
+
+--==================================================
+-- MAIN TAB (KNOB FARM + TUTORIAL)
+--==================================================
+
+local farmButton = Instance.new("TextButton", mainPage)
+farmButton.Size = UDim2.new(1,0,0,50)
+farmButton.Position = UDim2.new(0,0,0,0)
+farmButton.Text = "KNOB FARM: OFF"
+farmButton.Font = Enum.Font.GothamBold
+farmButton.TextSize = 18
+farmButton.TextColor3 = Color3.new(1,1,1)
+farmButton.BackgroundColor3 = Color3.fromRGB(255,69,58)
+farmButton.BorderSizePixel = 0
+Instance.new("UICorner", farmButton).CornerRadius = UDim.new(0,12)
+
+local tutorialButton = Instance.new("TextButton", mainPage)
+tutorialButton.Size = UDim2.new(1,0,0,50)
+tutorialButton.Position = UDim2.new(0,0,0,60)
+tutorialButton.Text = "KNOB FARM TUTORIAL"
 tutorialButton.Font = Enum.Font.GothamBold
-tutorialButton.TextSize = 24
+tutorialButton.TextSize = 18
 tutorialButton.TextColor3 = Color3.new(1,1,1)
 tutorialButton.BackgroundColor3 = Color3.fromRGB(0,122,255)
 tutorialButton.BorderSizePixel = 0
@@ -446,10 +564,227 @@ tutorialButton.MouseButton1Click:Connect(function()
 	end
 end)
 
+--==================================================
+-- SETTINGS TAB (KEYBIND TOGGLE)
+--==================================================
+
+local keybindToggle = Instance.new("TextButton", settingsPage)
+keybindToggle.Size = UDim2.new(1,0,0,50)
+keybindToggle.Position = UDim2.new(0,0,0,0)
+keybindToggle.Font = Enum.Font.GothamBold
+keybindToggle.TextSize = 16
+keybindToggle.TextColor3 = Color3.new(1,1,1)
+keybindToggle.BorderSizePixel = 0
+Instance.new("UICorner", keybindToggle).CornerRadius = UDim.new(0,12)
+
+local function updateKeybindUI()
+	keybindToggle.Text = "Hub Keybind: "..HUB_KEY.Name.." ["..(keybindEnabled and "ON" or "OFF").."]"
+	keybindToggle.BackgroundColor3 = keybindEnabled
+		and Color3.fromRGB(52,199,89)
+		or Color3.fromRGB(255,69,58)
+end
+
+updateKeybindUI()
+
+keybindToggle.MouseButton1Click:Connect(function()
+	keybindEnabled = not keybindEnabled
+	updateKeybindUI()
+	toast("Hub keybind "..(keybindEnabled and "enabled" or "disabled"), not keybindEnabled)
+end)
+
+-- Unload button (SETTINGS tab)
+local unloadButton = Instance.new("TextButton", settingsPage)
+unloadButton.Size = UDim2.new(1, 0, 0, 50)
+unloadButton.Position = UDim2.new(0, 0, 0, 60)
+unloadButton.BackgroundColor3 = Color3.fromRGB(255,69,58)
+unloadButton.TextColor3 = Color3.new(1,1,1)
+unloadButton.Font = Enum.Font.GothamBold
+unloadButton.TextSize = 18
+unloadButton.BorderSizePixel = 0
+unloadButton.Text = "UNLOAD"
+Instance.new("UICorner", unloadButton).CornerRadius = UDim.new(0, 12)
+unloadButton.MouseButton1Click:Connect(function()
+	if UNLOADED then return end
+	UNLOADED = true
+
+	-- Stop farm
+	farmenabled = false
+
+	-- Disconnect all tracked connections
+	for _, conn in ipairs(CONNECTIONS) do
+		pcall(function()
+			conn:Disconnect()
+		end)
+	end
+	table.clear(CONNECTIONS)
+
+	-- Destroy all GUIs created by this script
+	for _, gui in ipairs(CoreGui:GetChildren()) do
+		if gui:IsA("ScreenGui") then
+			pcall(function()
+				gui:Destroy()
+			end)
+		end
+	end
+
+	-- Final confirmation (best-effort)
+	pcall(function()
+		warn("[Naxxo Hub] Script unloaded.")
+	end)
+end)
+
+--==================================================
+-- HUB KEYBIND VISIBILITY TOGGLE
+--==================================================
+
+UserInputService.InputBegan:Connect(function(input, gp)
+	if gp then return end
+	if keybindEnabled and input.KeyCode == HUB_KEY then
+		hubVisible = not hubVisible
+		hub.Visible = hubVisible
+	end
+end)
+
+-- Player avatar (INFORMATION tab)
+local infoAvatar = Instance.new("ImageLabel", infoPage)
+infoAvatar.Size = UDim2.new(0, 36, 0, 36)
+infoAvatar.Position = UDim2.new(0, 10, 0, 0)
+infoAvatar.BackgroundTransparency = 1
+infoAvatar.Image = Players:GetUserThumbnailAsync(
+	player.UserId,
+	Enum.ThumbnailType.HeadShot,
+	Enum.ThumbnailSize.Size100x100
+)
+Instance.new("UICorner", infoAvatar).CornerRadius = UDim.new(1, 0)
+
+-- Username header (INFORMATION tab)
+local infoUsername = Instance.new("TextLabel", infoPage)
+infoUsername.Size = UDim2.new(1, -20, 0, 36)
+infoUsername.Position = UDim2.new(0, 54, 0, 0)
+infoUsername.BackgroundTransparency = 1
+infoUsername.Text = "User: " .. player.Name
+infoUsername.Font = Enum.Font.GothamBold
+infoUsername.TextSize = 20
+infoUsername.TextColor3 = Color3.fromRGB(255,255,255)
+infoUsername.TextXAlignment = Enum.TextXAlignment.Left
+
+-- Status badge
+local infoBadge = Instance.new("TextLabel", infoPage)
+infoBadge.Size = UDim2.new(0, 90, 0, 22)
+infoBadge.Position = UDim2.new(1, -100, 0, 7)
+infoBadge.BackgroundColor3 = Color3.fromRGB(52,199,89)
+infoBadge.TextColor3 = Color3.new(1,1,1)
+infoBadge.Font = Enum.Font.GothamBold
+infoBadge.TextSize = 12
+infoBadge.BorderSizePixel = 0
+infoBadge.Text = "VERIFIED"
+Instance.new("UICorner", infoBadge).CornerRadius = UDim.new(1, 0)
+
+--==================================================
+-- INFORMATION TAB (RUNTIME STATUS – DUPLICATE VIEW)
+--==================================================
+
+local function infoStat(y, text)
+	local t = Instance.new("TextLabel", infoPage)
+	t.Size = UDim2.new(1,-20,0,18)
+	t.Position = UDim2.new(0,10,0,y)
+	t.BackgroundTransparency = 1
+	t.TextColor3 = Color3.new(1,1,1)
+	t.Font = Enum.Font.Gotham
+	t.TextSize = 13
+	t.TextXAlignment = Enum.TextXAlignment.Left
+	t.Text = text
+	return t
+end
+
+local infoTime = infoStat(38, "Expires At: ...")
+
+task.spawn(function()
+	while authorized and not UNLOADED do
+		-- Status badge update
+         if userExpiry == nil then
+	        infoBadge.Text = "LIFETIME"
+	        infoBadge.BackgroundColor3 = Color3.fromRGB(52,199,89)
+        else
+	        infoBadge.Text = "VERIFIED"
+	        infoBadge.BackgroundColor3 = Color3.fromRGB(0,122,255)
+        end
+
+		if userExpiry == nil then
+	infoTime.Text = "Expires At: Never"
+	infoTime.TextColor3 = Color3.fromRGB(52,199,89)
+
+	-- Progress bar (lifetime)
+	expiryBarFill.Size = UDim2.new(1, 0, 1, 0)
+	expiryBarFill.BackgroundColor3 = Color3.fromRGB(52,199,89)
+else
+	local remaining = userExpiry - os.time()
+	infoTime.Text = "Expires At: " .. formatTimeLeft(remaining)
+
+	-- Progress bar (timed)
+	local total = userExpiry - authorizedAt
+	local ratio = math.clamp(remaining / total, 0, 1)
+	expiryBarFill.Size = UDim2.new(ratio, 0, 1, 0)
+
+	if remaining <= CRITICAL_TIME then
+		infoTime.TextColor3 = Color3.fromRGB(255,69,58)
+		expiryBarFill.BackgroundColor3 = Color3.fromRGB(255,69,58)
+	elseif remaining <= WARN_TIME then
+		infoTime.TextColor3 = Color3.fromRGB(255,214,10)
+		expiryBarFill.BackgroundColor3 = Color3.fromRGB(255,214,10)
+	else
+		infoTime.TextColor3 = Color3.fromRGB(52,199,89)
+		expiryBarFill.BackgroundColor3 = Color3.fromRGB(52,199,89)
+	end
+end
+
+		task.wait(0.5)
+	end
+end)
+
+-- Expiry progress bar background
+local expiryBarBg = Instance.new("Frame", infoPage)
+expiryBarBg.Size = UDim2.new(1, -20, 0, 6)
+expiryBarBg.Position = UDim2.new(0, 10, 0, 58)
+expiryBarBg.BackgroundColor3 = Color3.fromRGB(60,60,60)
+expiryBarBg.BorderSizePixel = 0
+Instance.new("UICorner", expiryBarBg).CornerRadius = UDim.new(1, 0)
+
+-- Expiry progress bar fill
+local expiryBarFill = Instance.new("Frame", expiryBarBg)
+expiryBarFill.Size = UDim2.new(1, 0, 1, 0)
+expiryBarFill.BackgroundColor3 = Color3.fromRGB(52,199,89)
+expiryBarFill.BorderSizePixel = 0
+Instance.new("UICorner", expiryBarFill).CornerRadius = UDim.new(1, 0)
+
+-- Copy UserID button (INFORMATION tab)
+local copyIdButton = Instance.new("TextButton", infoPage)
+copyIdButton.Size = UDim2.new(1, -20, 0, 40)
+copyIdButton.Position = UDim2.new(0, 10, 0, 82)
+copyIdButton.BackgroundColor3 = Color3.fromRGB(0,122,255)
+copyIdButton.TextColor3 = Color3.new(1,1,1)
+copyIdButton.Font = Enum.Font.GothamBold
+copyIdButton.TextSize = 16
+copyIdButton.BorderSizePixel = 0
+copyIdButton.Text = "Copy UserID"
+Instance.new("UICorner", copyIdButton).CornerRadius = UDim.new(0, 12)
+copyIdButton.MouseButton1Click:Connect(function()
+	if setclipboard then
+		setclipboard(tostring(player.UserId))
+		toast("UserID copied to clipboard.", false)
+	else
+		toast("Clipboard not supported.", true)
+	end
+end)
+
+--==================================================
+-- FARM LOGIC (SAME AS BEFORE)
+--==================================================
+
 local function startFarm()
 	task.spawn(function()
 		setStatus("Farm Running", Color3.fromRGB(52,199,89), "pulse")
-		while farmenabled do
+		while farmenabled and not UNLOADED do
 			replicatesignal(player.Kill)
 			game:GetService("ReplicatedStorage")
 				:WaitForChild("RemotesFolder")
@@ -461,16 +796,16 @@ local function startFarm()
 	end)
 end
 
-button.MouseButton1Click:Connect(function()
+farmButton.MouseButton1Click:Connect(function()
 	farmenabled = not farmenabled
 	if farmenabled then
-		button.Text = "Knob Farm: ON"
-		button.BackgroundColor3 = Color3.fromRGB(52,199,89)
+		farmButton.Text = "KNOB FARM: ON"
+		farmButton.BackgroundColor3 = Color3.fromRGB(52,199,89)
 		startFarm()
 	else
 		stopPulse()
 		setStatus("Verified", Color3.fromRGB(52,199,89))
-		button.Text = "Knob Farm: OFF"
-		button.BackgroundColor3 = Color3.fromRGB(255,69,58)
+		farmButton.Text = "KNOB FARM: OFF"
+		farmButton.BackgroundColor3 = Color3.fromRGB(255,69,58)
 	end
 end)
