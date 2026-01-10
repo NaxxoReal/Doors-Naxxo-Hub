@@ -29,7 +29,7 @@ local function startFarm()
     while farmenabled do
         replicatesignal(player.Kill)
         game:GetService("ReplicatedStorage"):WaitForChild("RemotesFolder"):WaitForChild("Statistics"):FireServer()
-        wait(0.25)
+        wait(0.03)
     end
 end    
 
